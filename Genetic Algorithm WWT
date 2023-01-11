@@ -1,0 +1,195 @@
+import numpy as np
+import pandas as pd
+from keras.models import Sequential
+from keras.layers import Dense, LSTM, GRU, SimpleRNN
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error
+from deap import base, creator, tools, algorithms
+from scipy.stats import bernoulli
+from bitstring import BitArray
+import tensorflow as tf
+
+tf.config.run_functions_eagerly(True)
+
+np.random.seed(1120)
+
+df=pd.read_excel(r'C:\Users\Tuse\Desktop\rainyweather5.xlsx')
+dff=df.drop(['t','Xbh5d1000','So5','Xs5','Xi5','Xp5','Xba5','Ss5','Xbh5','Sno5','Snd5','Salk5','ro1','ro2','ro3','ro6','ro3Eksik','deltaSnh5','carp'],axis=1)
+dfff=dff.iloc[674:924]
+data=np.array(dfff)
+
+n=data.shape[0]
+d=data.shape[1]
+
+normalized_data=np.zeros((n,d))
+
+for i in range(n):
+  for j in range(d):
+    normalized_data[i,j]=2*((data[i,j]-np.min(data[:,j]))/(np.max(data[:,j])-np.min(data[:,j])))-1
+
+new_set= pd.DataFrame(normalized_data, columns = dfff.columns)
+
+train_data=normalized_data[0:150]
+test_data=normalized_data[150:]
+
+
+x_train=[]
+y_train=[]
+
+
+def prepare_dataset(X, y, time_steps=1):
+    
+    input_sequence, output = [], []
+    for i in range(len(X) - time_steps):
+        sequence = X[i:(i + time_steps)]
+        input_sequence.append(sequence)        
+        output.append(y[i + time_steps])
+        
+    return np.array(input_sequence), np.array(output)
+
+x_train,y_train = prepare_dataset(train_data,train_data[:,-1],5)
+x_test,y_test = prepare_dataset(test_data,test_data[:,-1],5)
+
+def backnorm(x): 
+  backnormOutput=(x+1)/2*(np.max(data[:,-1]-np.min(data[:,-1])))+np.min(data[:,-1])
+
+  return backnormOutput
+
+def custom_loss_function(data, y_pred):
+    
+   y_true=data[:,None,0]
+   Ro1=data[:,None,1]
+   Ro2=data[:,None,2]
+   Ro3eksik=data[:,None,3]
+   Ro6=data[:,None,4]
+   DeltaSnh=data[:,None,5]   
+   squared_difference = tf.square((y_true - y_pred))
+   mse = tf.reduce_mean(squared_difference, axis=-1)
+   y_prednonscaled=backnorm(y_pred.numpy())
+   phyloss3=tf.square(DeltaSnh+0.08*Ro1+0.08*Ro2+(0.08+(1/0.24))*Ro3eksik*y_prednonscaled/(1+y_prednonscaled)-Ro6)
+   phyloss=tf.reduce_mean(phyloss3, axis=-1)
+   
+   return mse+0.0000001*phyloss
+
+def train_evaluate(ga_individual_solution):   
+    # Decode GA solution to integer for window_size and num_units
+
+    window_size_bits = BitArray(ga_individual_solution[0:6])
+    num_units_bits = BitArray(ga_individual_solution[6:]) 
+    
+    window_size = window_size_bits.uint
+    num_units = num_units_bits.uint
+    print('\nWindow Size: ', window_size, ', Num of Units: ', num_units)
+        
+    # Return fitness score of 100 if window_size or num_unit is zero
+    if  window_size == 0 or num_units == 0:
+        return 100, 
+    
+    # Segment the train_data based on new window_size; split into train and validation (80/20)
+    x_train,y_train= prepare_dataset(train_data,train_data[:,-1],window_size)
+                                          
+    deltaSnh=df.iloc[674+window_size:824,-1].values
+    ro1=df.iloc[674+window_size:824,-6].values
+    ro2=df.iloc[674+window_size:824,-5].values
+    ro3eksik=df.iloc[674+window_size:824,-7].values
+    ro6=df.iloc[674+window_size:824,-4].values
+
+
+    model=Sequential()
+    model.add(LSTM(units=num_units,activation='tanh',return_sequences=True,input_shape=(window_size, x_train.shape[2])))
+    model.add(LSTM(units=num_units,activation='tanh',return_sequences=False))
+    model.add(Dense(1))
+
+    model.compile(optimizer='adam',loss=custom_loss_function)
+    print(x_train.size)
+    print(np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))).shape)
+    model.fit(x_train, np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))), epochs=100, batch_size=25,shuffle=False)
+
+    y_pred = model.predict(x_train)
+    
+    # Calculate the MSE score as fitness score for GA
+    mse = mean_squared_error(y_train, y_pred)
+    print('Validation MSE: ', mse,'\n')
+    
+    return mse, 
+
+
+population_size = 4
+num_generations = 4
+gene_length = 10
+
+# As we are trying to minimize the RMSE score, that's why using -1.0. 
+# In case, when you want to maximize accuracy for instance, use 1.0
+creator.create('FitnessMax', base.Fitness, weights = (-1.0,))
+creator.create('Individual', list , fitness = creator.FitnessMax)
+
+toolbox = base.Toolbox()
+toolbox.register('binary', bernoulli.rvs, 0.5)
+toolbox.register('individual', tools.initRepeat, creator.Individual, toolbox.binary, n = gene_length)
+toolbox.register('population', tools.initRepeat, list , toolbox.individual)
+
+toolbox.register('mate', tools.cxOrdered)
+toolbox.register('mutate', tools.mutShuffleIndexes, indpb = 0.6)
+toolbox.register('select', tools.selRoulette)
+toolbox.register('evaluate', train_evaluate)
+
+population = toolbox.population(n = population_size)
+r = algorithms.eaSimple(population, toolbox, cxpb = 0.4, mutpb = 0.1, ngen = num_generations, verbose = False)
+
+best_individuals = tools.selBest(population,k = 1)
+best_window_size = None
+best_num_units = None
+
+for bi in best_individuals:
+    
+    window_size_bits = BitArray(bi[0:6])
+    num_units_bits = BitArray(bi[6:]) 
+    best_window_size = window_size_bits.uint
+    best_num_units = num_units_bits.uint
+    print('\nWindow Size: ', best_window_size, ', Num of Units: ', best_num_units)
+        
+x_train,y_train = prepare_dataset(train_data,train_data[:,-1],best_window_size)
+x_test, y_test = prepare_dataset(test_data,test_data[:,-1],best_window_size)
+
+deltaSnh=df.iloc[674+best_window_size:824,-1].values
+ro1=df.iloc[674+best_window_size:824,-6].values
+ro2=df.iloc[674+best_window_size:824,-5].values
+ro3eksik=df.iloc[674+best_window_size:824,-7].values
+ro6=df.iloc[674+best_window_size:824,-4].values
+
+model=Sequential() 
+model.add(LSTM(units=best_num_units,activation='tanh',return_sequences=True,input_shape=(best_window_size, x_train.shape[2])))
+model.add(LSTM(units=best_num_units,activation='tanh',return_sequences=False))
+model.add(Dense(1))
+
+model.compile(optimizer='adam',loss=custom_loss_function)
+model.fit(x_train, np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))), epochs=100, batch_size=25,shuffle=False)
+
+y_predtrain= model.predict(x_train)
+model_trainprediction=backnorm(y_predtrain)
+actual_trainset_values=backnorm(y_train)
+y_predtest = model.predict(x_test)
+model_testprediction=backnorm(y_predtest)
+actual_testset_values=backnorm(y_test)
+
+mse = mean_squared_error(model_trainprediction, actual_trainset_values)
+print('Train MSE: ', mse)    
+
+mse = mean_squared_error(model_testprediction, actual_testset_values)
+print('Test MSE: ', mse)    
+
+fig,ax = plt.subplots()
+x=df['t']
+plt.plot(x[674+best_window_size:824,],model_trainprediction, label='Predicted Train Snh5')
+plt.plot(x[674+best_window_size:824,],actual_trainset_values, label='Actual Train Snh5')
+ax.set_xlabel('Days')
+ax.set_ylabel('Snh5')
+plt.legend();
+
+fig,ax = plt.subplots()
+x=df['t']
+plt.plot(x[824:924-best_window_size,],model_testprediction, label='Predicted Test Snh5')
+plt.plot(x[824:924-best_window_size,],actual_testset_values, label='Actual Test Snh5')
+ax.set_xlabel('Days')
+ax.set_ylabel('Snh5')
+plt.legend();
