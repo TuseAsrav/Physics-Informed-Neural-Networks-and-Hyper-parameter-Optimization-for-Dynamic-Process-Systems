@@ -1,0 +1,149 @@
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.layers import RNN, Dense, Layer
+from tensorflow.keras import Sequential
+from tensorflow.python.framework import tensor_shape
+from tensorflow import float32, concat, convert_to_tensor
+from tensorflow.keras.callbacks import ModelCheckpoint
+from sklearn import metrics
+
+class EulerIntegratorCell(Layer):
+    def __init__(self, ixb, YA, dKlayer, Snheff0=None, units=1, **kwargs):
+        super(EulerIntegratorCell, self).__init__(**kwargs)
+        self.units = units
+        self.ixb     = ixb
+        self.YA     = YA
+        self.Snheff0    = Snheff0
+        self.dKlayer     = dKlayer
+        self.state_size  = tensor_shape.TensorShape(self.units)
+        self.output_size = tensor_shape.TensorShape(self.units)
+
+    def build(self, input_shape, **kwargs):
+        self.built = True
+
+    def call(self, inputs, states):
+        inputs=convert_to_tensor(inputs)
+        print(inputs.shape)
+        Snheff_tm1=convert_to_tensor(states)
+        print(Snheff_tm1.shape)
+        S_d_tm1 = concat((inputs[:,8,None], Snheff_tm1[0, :]), axis=1)
+        print(S_d_tm1.shape)
+        dk_t    = self.dKlayer(S_d_tm1)
+        dSnheff_t    = (self.ixb + 1/self.YA) * (dk_t) 
+        Snheff       = dSnheff_t + Snheff_tm1[0, :]
+        return Snheff, [Snheff]
+    
+    def get_initial_state(self, inputs=None, batch_size=None, dtype=None):
+        return self.Snheff0
+    
+class Normalization(Layer):
+    def __init__(self, S_low, S_up, a_low, a_up, **kwargs):
+        super(Normalization, self).__init__(**kwargs)
+        self.low_bound_S   = S_low
+        self.upper_bound_S = S_up
+        self.low_bound_a   = a_low
+        self.upper_bound_a = a_up
+
+    def build(self, input_shape, **kwargs):
+        self.built = True
+
+    def call(self, inputs):
+        output  = (inputs - [self.low_bound_S, self.low_bound_a]) / [(self.upper_bound_S - self.low_bound_S), (self.upper_bound_a - self.low_bound_a)]
+        return output
+
+def create_model(ixb, YA, Snheff0, dKlayer, batch_input_shape, return_state= False, return_sequences=False):
+    euler = EulerIntegratorCell(ixb=ixb, YA=YA, dKlayer=dKlayer, Snheff0=Snheff0, batch_input_shape=batch_input_shape)
+    PINN  = RNN(cell=euler, batch_input_shape=batch_input_shape, return_sequences=return_sequences, return_state=return_state)
+    model = Sequential()
+    model.add(PINN)
+    model.compile(loss='mse', optimizer='Adam')
+    return model
+
+if __name__ == "__main__":
+    # Paris law coefficients
+    [ixb, YA] = [0.08, 0.24]
+    
+    df=pd.read_excel(r'C:\Users\Tuse\Desktop\rainyweather5.xlsx')
+    dff=df.drop(['t','Xbh5d1000','So5','Xs5','Xi5','Xp5','Xba5','Ss5','Xbh5','Sno5','Snd5','Salk5','ro1','ro2','ro3','ro6','ro3Eksik','carp','deltaSnh5'],axis=1)
+    dfff=dff.iloc[674:924]
+    data=np.array(dfff)
+    
+    carp=df.iloc[679:824,-3].values
+    
+    n=data.shape[0]
+    d=data.shape[1]
+    
+    normalized_data=np.zeros((n,d))
+    
+    for i in range(n):
+      for j in range(d):
+        normalized_data[i,j]=2*((data[i,j]-np.min(data[:,j]))/(np.max(data[:,j])-np.min(data[:,j])))-1
+    
+    new_set= pd.DataFrame(normalized_data, columns = dfff.columns)
+    
+    training_set=new_set.iloc[0:150]
+    test_set=new_set.iloc[150:]
+
+    def backnorm(x): 
+        backnormOutput=(x+1)/2*(np.max(data[:,-1]-np.min(data[:,-1])))+np.min(data[:,-1])
+    
+        return backnormOutput
+  
+    def create_data_sequence(X, y, time_steps=1):
+    
+        input_sequence, output = [], []
+        for i in range(len(X) - time_steps):
+            sequence = X.iloc[i:(i + time_steps)].values
+            input_sequence.append(sequence)        
+            output.append(y.iloc[i + time_steps])
+        return np.array(input_sequence), np.array(output)
+    
+    time_steps = 5
+    
+    training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, time_steps)
+    test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, time_steps)
+    Snheff0= np.asarray(20.7746*np.ones((training_set_sequence.shape[0],1)))
+        
+    # stress-intensity layer
+    dKlayer = Sequential()
+    dKlayer.add(Normalization(np.min(training_set_sequence[:,:,8,None]), np.max(training_set_sequence[:,:,8,None]), np.min(training_set_output), np.max(training_set_output)))
+    dKlayer.add(Dense(25, activation='tanh'))
+    dKlayer.add(Dense(25, activation='tanh'))
+    dKlayer.add(Dense(1))
+
+    Input_range  = np.linspace(np.min(training_set_sequence[:,:,8,None]), np.max(training_set_sequence[:,:,8,None]), 1000)
+    Output_range  = np.linspace(np.min(training_set_output), np.max(training_set_output), 1000)[np.random.permutation(np.arange(1000))]
+    dK_range = 0.9*Input_range + Output_range*0.2
+
+    dKlayer.compile(loss='mse', optimizer='Adam')
+    inputs_train = np.transpose(np.asarray([Input_range, Output_range]))
+    dKlayer.fit(inputs_train, dK_range, epochs=200)
+    
+            # fitting physics-informed neural network
+    mckp = ModelCheckpoint(filepath = "./savedmodels/cp.ckpt", monitor = 'loss', verbose = 1,
+                           save_best_only = True, mode = 'min', save_weights_only = True, encoding='utf-16', errors='ignore')
+
+    model = create_model(ixb=ixb, YA=YA, Snheff0=convert_to_tensor(Snheff0, dtype=float32), dKlayer=dKlayer, batch_input_shape=training_set_sequence.shape)
+    actual_trainingset_values = backnorm(training_set_output)
+   
+    model.fit(training_set_sequence, training_set_output, epochs=2000, steps_per_epoch=1, verbose=1,callbacks=[mckp])
+    
+    """
+    model.save_weights('./checkpoints/my_checkpoint')"""
+        
+    XbhPredTrain = model.predict_on_batch(training_set_sequence)[:,:]
+    XbhPred =backnorm(XbhPredTrain)
+    
+    fig,ax = plt.subplots()
+    x=df['t']
+    plt.plot(x[679:824,], XbhPred, label='Predicted Train Snh5 (RNN)')
+    plt.plot(x[679:824,],actual_trainingset_values, label='Actual Train Snh5')
+    ax.set_xlabel('Days')
+    ax.set_ylabel('Snh5')
+    plt.legend();
+    plt.show() 
+    
+    mse=metrics.mean_squared_error(actual_trainingset_values, XbhPred)
+    print('RNN:Train MSE: ', mse)
