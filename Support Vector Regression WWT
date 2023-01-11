@@ -1,0 +1,76 @@
+
+import numpy as np 
+import pandas as pd 
+from sklearn import metrics
+import matplotlib.pyplot as plt
+
+df=pd.read_excel(r'C:\Users\Tuse\Desktop\rainyweather5.xlsx')
+dff=df.drop(['t','Xbh5d1000','So5','Xs5','Xi5','Xp5','Xba5','Ss5','Xbh5','Sno5','Snd5','Salk5','ro1','ro2','ro3','ro6','ro3Eksik','deltaSnh5'],axis=1)
+dfff=dff.iloc[674:924]
+data=np.array(dfff)
+
+n=data.shape[0]
+d=data.shape[1]
+
+normalized_data=np.zeros((n,d))
+
+for i in range(n):
+  for j in range(d):
+    normalized_data[i,j]=2*((data[i,j]-np.min(data[:,j]))/(np.max(data[:,j])-np.min(data[:,j])))-1
+
+new_set= pd.DataFrame(normalized_data, columns = dfff.columns)
+
+training_set=new_set.iloc[0:150]
+test_set=new_set.iloc[150:]
+
+x_test=test_set.iloc[:,:8].values
+y_test=test_set.iloc[:,-1].values
+x_train=training_set.iloc[:,:8].values
+y_train=training_set.iloc[:,-1].values
+
+def backnorm(x): 
+  backnormOutput=(x+1)/2*(np.max(data[:,-1]-np.min(data[:,-1])))+np.min(data[:,-1])
+
+  return backnormOutput
+
+
+from sklearn.svm import SVR
+regressor= SVR(kernel='rbf')
+regressor.fit(x_train,y_train)
+y_pred_test=regressor.predict(x_test)
+
+y_pred_train = regressor.predict(x_train)
+
+model_testpredictions = backnorm(y_pred_test)
+model_trainpredictions= backnorm(y_pred_train)
+actual_testset_values = backnorm(y_test)
+actual_trainingset_values= backnorm(y_train)
+
+
+msetest=metrics.mean_squared_error(actual_testset_values, model_testpredictions)
+
+print('Suppport Vector Regression Accuracy: ', regressor.score(x_test,y_test))
+print('Test MSE: ', msetest)
+
+msetrain=metrics.mean_squared_error(actual_trainingset_values, model_trainpredictions)
+
+print('Train MSE: ', msetrain)
+
+
+fig,ax = plt.subplots()
+x=df['t']
+plt.plot(x[824:924,],model_testpredictions, label='Predicted Test Snh5')
+plt.plot(x[824:924,],actual_testset_values, label='Actual Test Snh5')
+ax.set_xlabel('Days')
+ax.set_ylabel('Snh5')
+plt.legend();
+plt.show()
+
+fig,ax = plt.subplots()
+x=df['t']
+plt.plot(x[674:824,],model_trainpredictions, label='Predicted Train Snh5')
+plt.plot(x[674:824,],actual_trainingset_values, label='Actual Train Snh5')
+ax.set_xlabel('Days')
+ax.set_ylabel('Snh5')
+plt.legend();
+plt.show()
