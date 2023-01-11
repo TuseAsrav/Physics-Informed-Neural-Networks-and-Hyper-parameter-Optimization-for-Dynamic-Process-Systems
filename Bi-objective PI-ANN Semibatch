@@ -14,6 +14,7 @@ from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 import keras.backend as K
 
+tf.config.run_functions_eagerly(True)
 
 df=pd.read_excel(r'C:\Users\Tuse\Desktop\semibatch2.xlsx')
 dff=df.drop(['time','dk','deltaCC'],axis=1)
