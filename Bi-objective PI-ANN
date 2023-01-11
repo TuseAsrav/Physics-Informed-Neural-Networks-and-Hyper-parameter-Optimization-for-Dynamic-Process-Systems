@@ -1,0 +1,125 @@
+
+import math
+import numpy as np
+import pandas as pd
+import keras
+import tensorflow as tf
+from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
+from keras.models import Sequential
+from keras.layers import Dense, LSTM, GRU, SimpleRNN
+import matplotlib.pyplot as plt
+from sklearn import metrics
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split
+import keras.backend as K
+
+
+df=pd.read_excel(r'C:\Users\Tuse\Desktop\semibatch2.xlsx')
+dff=df.drop(['time','dk','deltaCC'],axis=1)
+data=np.array(dff)
+
+n=data.shape[0]
+d=data.shape[1]
+
+normalized_data=np.zeros((n,d))
+
+for i in range(n):
+  for j in range(d):
+    normalized_data[i,j]=2*((data[i,j]-np.min(data[:,j]))/(np.max(data[:,j])-np.min(data[:,j])))-1
+
+new_set= pd.DataFrame(normalized_data, columns = dff.columns)
+
+x=new_set.iloc[:,0:2].values
+y=new_set.iloc[:,2:3].values
+
+x_train, x_test, y_train, y_test=train_test_split(x,y, test_size=0.7, shuffle=False)
+
+def backnormA(x): 
+  backnormCA=(x+1)/2*(np.max(data[:,0]-np.min(data[:,0])))+np.min(data[:,0])
+
+  return backnormCA
+
+def backnormB(x): 
+  backnormCB=(x+1)/2*(np.max(data[:,1]-np.min(data[:,1])))+np.min(data[:,1])
+
+  return backnormCB
+
+def backnormC(x): 
+  backnormCC=(x+1)/2*(np.max(data[:,2]-np.min(data[:,2])))+np.min(data[:,2])
+
+  return backnormCC
+
+trainingEQ=df.iloc[:150,-3].values
+deltaCCtraining=df.iloc[:150,-1].values
+
+def custom_loss_function(data, y_pred):
+    
+   y_true=data[:,None,0]
+   CA=data[:,None,1]
+   CB=data[:,None,2]
+   EQ=data[:,None,3]
+   deltaCC=data[:,None,4]
+   squared_difference = tf.square((y_true - y_pred))
+   mse = tf.reduce_mean(squared_difference, axis=-1)
+   y_prednonscaled=backnormC(y_pred.numpy())
+   Ca=backnormA(CA.numpy())
+   Cb=backnormB(CB.numpy())
+   phyloss3=tf.square(deltaCC-0.2*Ca*Cb+EQ*y_prednonscaled)
+   phyloss=tf.reduce_sum(phyloss3, axis=-1)
+   
+   return 0.001*mse+100*phyloss
+
+
+model = keras.Sequential()
+model.add(keras.layers.Dense(units=25,activation='tanh',input_shape=(x_train.shape[1],)))
+model.add(keras.layers.Dense(units=25,activation='tanh',input_shape=(x_train.shape[1],)))
+model.add(keras.layers.Dense(units=1))
+model.summary()
+
+model.compile(loss=custom_loss_function, optimizer='Adam')
+
+es=tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10)
+
+history = model.fit(
+        x_train,
+        np.hstack((y_train.reshape((150,1)),x_train[:,0].reshape((150,1)),x_train[:,1].reshape((150,1)),trainingEQ.reshape((150,1)),deltaCCtraining.reshape((150,1)))),
+        epochs=400, 
+        batch_size=25, 
+        shuffle=False,
+        callbacks=[es]
+)
+
+test_set_predictions = model.predict(x_test)
+
+model_testpredictions = backnormC(test_set_predictions)
+actual_testset_values = backnormC(y_test)
+    
+mse=metrics.mean_squared_error(actual_testset_values, model_testpredictions)
+print('Test MSE: ', mse)
+
+train_set_predictions = model.predict(x_train)
+
+model_trainpredictions= backnormC(train_set_predictions)
+actual_trainingset_values= backnormC(y_train)
+
+mse=metrics.mean_squared_error(actual_trainingset_values, model_trainpredictions)
+print('Train MSE: ', mse)
+
+fig,ax = plt.subplots()
+x=df['time']
+plt.plot(x[150:,],model_testpredictions, label='Predicted Test CC')
+plt.plot(x[150:,],actual_testset_values, label='Actual Test CC')
+ax.set_xlabel('Minutes')
+ax.set_ylabel('CC')
+plt.legend();
+plt.show()
+
+fig,ax = plt.subplots()
+x=df['time']
+plt.plot(x[:150,],model_trainpredictions, label='Predicted Train CC')
+plt.plot(x[:150,],actual_trainingset_values, label='Actual Train CC')
+ax.set_xlabel('Minutes')
+ax.set_ylabel('CC')
+plt.legend();
+plt.show()
