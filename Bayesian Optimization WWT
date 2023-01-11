@@ -1,0 +1,184 @@
+import numpy as np
+import tensorflow as tf
+import pandas as pd
+from sklearn import metrics
+
+tf.config.run_functions_eagerly(True)
+tf.data.experimental.enable_debug_mode()
+tf.autograph.experimental.do_not_convert
+
+df=pd.read_excel(r'C:\Users\Tuse\Desktop\rainyweather5.xlsx')
+dff=df.drop(['t','Xbh5d1000','So5','Xs5','Xi5','Xp5','Xba5','Ss5','Xbh5','Sno5','Snd5','Salk5','ro1','ro2','ro3','ro6','ro3Eksik','deltaSnh5','carp'],axis=1)
+dfff=dff.iloc[674:924]
+data=np.array(dfff)
+
+n=data.shape[0]
+d=data.shape[1]
+
+normalized_data=np.zeros((n,d))
+
+for i in range(n):
+  for j in range(d):
+    normalized_data[i,j]=2*((data[i,j]-np.min(data[:,j]))/(np.max(data[:,j])-np.min(data[:,j])))-1
+
+new_set= pd.DataFrame(normalized_data, columns = dfff.columns)
+
+training_set=new_set.iloc[0:150]
+test_set=new_set.iloc[150:]
+
+
+def backnorm(x): 
+  backnormOutput=(x+1)/2*(np.max(data[:,-1]-np.min(data[:,-1])))+np.min(data[:,-1])
+
+  return backnormOutput
+
+def create_data_sequence(X, y, time_steps=1):
+
+    input_sequence, output = [], []
+    for i in range(len(X) - time_steps):
+        sequence = X.iloc[i:(i + time_steps)].values
+        input_sequence.append(sequence)        
+        output.append(y.iloc[i + time_steps])
+    return np.array(input_sequence), np.array(output)
+
+
+def backnorm(x): 
+  backnormOutput=(x+1)/2*(np.max(data[:,-1]-np.min(data[:,-1])))+np.min(data[:,-1])
+
+  return backnormOutput
+
+def custom_loss_function(data, y_pred):
+    
+   y_true=data[:,None,0]
+   Ro1=data[:,None,1]
+   Ro2=data[:,None,2]
+   Ro3eksik=data[:,None,3]
+   Ro6=data[:,None,4]
+   DeltaSnh=data[:,None,5]  
+   squared_difference = tf.square((y_true - y_pred))
+   mse = tf.reduce_mean(squared_difference, axis=-1)
+   y_prednonscaled=backnorm(y_pred.numpy())
+   phyloss3=tf.square(DeltaSnh+0.08*Ro1+0.08*Ro2+(0.08+(1/0.24))*Ro3eksik*y_prednonscaled/(1+y_prednonscaled)-Ro6)
+   phyloss=tf.reduce_mean(phyloss3, axis=-1)
+   
+   return mse+0.0000001*phyloss
+
+from keras.models import Sequential, Model
+from keras.layers import Dense, Input, GRU
+from scikeras.wrappers import KerasRegressor
+from numpy import mean
+from sklearn.model_selection import cross_val_score
+from skopt.space import Integer
+from skopt.utils import use_named_args
+from skopt import gp_minimize
+
+def baseline_model(optimizer="adam",batch_size=25,epochs=50,neurons=25,activation="tanh",time_steps=5):
+    
+    training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, time_steps)
+    test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, time_steps)
+    deltaSnh=df.iloc[674+time_steps:824,-1].values
+    ro1=df.iloc[674+time_steps:824,-6].values
+    ro2=df.iloc[674+time_steps:824,-5].values
+    ro3eksik=df.iloc[674+time_steps:824,-7].values
+    ro6=df.iloc[674+time_steps:824,-4].values
+    
+    model = Sequential()
+    model.add(GRU(neurons,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
+    model.add(GRU(neurons,activation="tanh",return_sequences=False))
+    model.add(Dense(1))
+    model.compile("adam",loss=custom_loss_function)
+    history = model.fit(training_set_sequence, np.hstack((training_set_output.reshape((150-time_steps,1)),ro1.reshape((150-time_steps,1)),ro2.reshape((150-time_steps,1)),ro3eksik.reshape((150-time_steps,1)),ro6.reshape((150-time_steps,1)),deltaSnh.reshape((150-time_steps,1)))),
+              batch_size=batch_size,
+              epochs=epochs,
+              validation_split=0.2
+              ) #verbose set to 1 will show the training process
+    return model
+      
+search_space = [Integer(10,40),Integer(2,10)]
+
+def objective (params):
+    neurons=params[0]
+    time_steps=params[1]
+    
+    training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, time_steps)
+    test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, time_steps)
+    deltaSnh=df.iloc[674+time_steps:824,-1].values
+    ro1=df.iloc[674+time_steps:824,-6].values
+    ro2=df.iloc[674+time_steps:824,-5].values
+    ro3eksik=df.iloc[674+time_steps:824,-7].values
+    ro6=df.iloc[674+time_steps:824,-4].values
+    
+    model = Sequential()
+    model.add(GRU(neurons,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
+    model.add(GRU(neurons,activation="tanh",return_sequences=False))
+    model.add(Dense(units=1))
+    model.summary()
+
+    model.compile(loss=custom_loss_function, optimizer='Adam')
+
+    history = model.fit(
+        training_set_sequence[0:70],
+        np.hstack((training_set_output[0:70].reshape((70,1)),ro1[0:70].reshape((70,1)),ro2[0:70].reshape((70,1)),ro3eksik[0:70].reshape((70,1)),ro6[0:70].reshape((70,1)),deltaSnh[0:70].reshape((70,1)))),
+        validation_data=(training_set_sequence[70:],np.hstack((training_set_output[70:].reshape((80-time_steps,1)),ro1[70:].reshape((80-time_steps,1)),ro2[70:].reshape((80-time_steps,1)),ro3eksik[70:].reshape((80-time_steps,1)),ro6[70:].reshape((80-time_steps,1)),deltaSnh[70:].reshape((80-time_steps,1))))),
+        epochs=100, 
+        batch_size=25, 
+        shuffle=False)
+    
+    test_set_predictions = model.predict(training_set_sequence[70:])
+
+    model_testpredictions = backnorm(test_set_predictions)
+    actual_testset_values = backnorm(training_set_output[70:])
+    
+    mse1=metrics.mean_squared_error(actual_testset_values, model_testpredictions)
+    
+    model2 = Sequential()
+    model2.add(GRU(neurons,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
+    model2.add(GRU(neurons,activation="tanh",return_sequences=False))
+    model2.add(Dense(units=1))
+    model2.summary()
+    
+    model2.compile(loss=custom_loss_function, optimizer='Adam')
+
+    history2 = model2.fit(
+        training_set_sequence[70:],
+        np.hstack((training_set_output[70:].reshape((80-time_steps,1)),ro1[70:].reshape((80-time_steps,1)),ro2[70:].reshape((80-time_steps,1)),ro3eksik[70:].reshape((80-time_steps,1)),ro6[70:].reshape((80-time_steps,1)),deltaSnh[70:].reshape((80-time_steps,1)))),
+        validation_data=(training_set_sequence[0:70],np.hstack((training_set_output[0:70].reshape((70,1)),ro1[0:70].reshape((70,1)),ro2[0:70].reshape((70,1)),ro3eksik[0:70].reshape((70,1)),ro6[0:70].reshape((70,1)),deltaSnh[0:70].reshape((70,1))))),
+        epochs=100, 
+        batch_size=25, 
+        shuffle=False)
+    
+    model2.compile(loss=custom_loss_function, optimizer='Adam')
+    
+    test_set_predictions2 = model2.predict(training_set_sequence[0:70])
+
+    model2_testpredictions = backnorm(test_set_predictions2)
+    actual_testset_values2 = backnorm(training_set_output[0:70])
+    
+    mse1=metrics.mean_squared_error(actual_testset_values, model_testpredictions)
+    mse2=metrics.mean_squared_error(actual_testset_values2, model2_testpredictions)
+    
+    validationerrors=mse1+mse2
+    result=mean(validationerrors)
+
+    return -1.0*result
+
+training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, 5)
+test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, 5)
+deltaSnh=df.iloc[679:824,-1].values
+ro1=df.iloc[679:824,-6].values
+ro2=df.iloc[679:824,-5].values
+ro3eksik=df.iloc[679:824,-7].values
+ro6=df.iloc[679:824,-4].values
+
+model=baseline_model()
+model.fit(training_set_sequence,np.hstack((training_set_output.reshape((145,1)),ro1.reshape((145,1)),ro2.reshape((145,1)),ro3eksik.reshape((145,1)),ro6.reshape((145,1)),deltaSnh.reshape((145,1)))),validation_split=0.2,shuffle=False,batch_size=25,epochs=100)
+    
+# perform optimization
+result = gp_minimize(objective, search_space)
+# summarizing finding:
+print('Best MSE:' % (1.0 - result.fun))
+print('Best Parameters:' % (result.x[0]))
+
+from skopt import dump, load
+dump(result, 'result.pkl')
+load('result.pkl')
