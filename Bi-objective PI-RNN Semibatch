@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import requests
 import keras
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -12,7 +13,10 @@ import keras.backend as K
 
 tf.config.run_functions_eagerly(True)
 
-df=pd.read_excel(r'C:\Users\Tuse\Desktop\semibatch2.xlsx')
+url= 'https://github.com/TuseAsrav/Physics-Informed-Neural-Networks-and-Hyper-parameter-Optimization-for-Dynamic-Process-Systems/blob/main/semibatch2.xlsx?raw=true'
+myfile = requests.get(url)
+
+df=pd.read_excel(myfile.content)
 dff=df.drop(['time','dk','deltaCC'],axis=1)
 data=np.array(dff)
 
