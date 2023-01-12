@@ -50,6 +50,7 @@ def backnormC(x):
   return backnormCC
 
 
+trainingEQ=df.iloc[5:150,-3].values
 deltaCCtraining=df.iloc[:150,-1].values
 
 def custom_loss_function(data, y_pred):
