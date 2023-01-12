@@ -1,17 +1,23 @@
 
+
+import math
 import numpy as np
 import pandas as pd
 import requests
 import keras
 import tensorflow as tf
+from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
+from keras.models import Sequential
+from keras.layers import Dense, LSTM, GRU, SimpleRNN
 import matplotlib.pyplot as plt
 from sklearn import metrics
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
+import keras.backend as K
 
-tf.config.run_functions_eagerly(True)
 
-url= 'https://github.com/TuseAsrav/Physics-Informed-Neural-Networks-and-Hyper-parameter-Optimization-for-Dynamic-Process-Systems/blob/main/semibatchdataset.xlsx?raw=true'
+url= 'https://github.com/TuseAsrav/Physics-Informed-Neural-Networks-and-Hyper-parameter-Optimization-for-Dynamic-Process-Systems/blob/main/semibatch2.xlsx?raw=true'
 myfile = requests.get(url)
 
 df=pd.read_excel(myfile.content)
@@ -30,6 +36,8 @@ for i in range(n):
 new_set= pd.DataFrame(normalized_data, columns = dff.columns)
 
 x=new_set.iloc[:,0:2].values
+"""B=normalized_data[:350,36]
+x=np.hstack((A.reshape(350,7),B.reshape(350,1)))"""
 y=new_set.iloc[:,2:3].values
 
 x_train, x_test, y_train, y_test=train_test_split(x,y, test_size=0.7, shuffle=False)
@@ -49,8 +57,7 @@ def backnormC(x):
 
   return backnormCC
 
-
-trainingEQ=df.iloc[5:150,-3].values
+trainingEQ=df.iloc[:150,-3].values
 deltaCCtraining=df.iloc[:150,-1].values
 
 def custom_loss_function(data, y_pred):
@@ -62,12 +69,18 @@ def custom_loss_function(data, y_pred):
    deltaCC=data[:,None,4]
    squared_difference = tf.square((y_true - y_pred))
    mse = tf.reduce_mean(squared_difference, axis=-1)
+   """mse= keras.losses.MSE(y_true, y_pred)"""
    y_prednonscaled=backnormC(y_pred.numpy())
    Ca=backnormA(CA.numpy())
    Cb=backnormB(CB.numpy())
    phyloss3=tf.square(deltaCC-0.2*Ca*Cb+EQ*y_prednonscaled)
    phyloss=tf.reduce_sum(phyloss3, axis=-1)
-   
+   """phyloss1=y_pred-1.6192
+   phyloss2=y_pred+2.9041"""
+   """maximum y 1.6192 (18.1594),minimum y -2.9041 (2.8948)
+   K.print_tensor(y_true)"""
+   K.print_tensor(phyloss)
+
    return 0.001*mse+100*phyloss
 
 
