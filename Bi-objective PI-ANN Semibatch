@@ -15,7 +15,7 @@ url= 'https://github.com/TuseAsrav/Physics-Informed-Neural-Networks-and-Hyper-pa
 myfile = requests.get(url)
 
 df=pd.read_excel(myfile.content)
-dff=df.drop(['time','deltaCC'],axis=1)
+dff=df.drop(['time','dk','deltaCC'],axis=1)
 data=np.array(dff)
 
 n=data.shape[0]
@@ -48,6 +48,7 @@ def backnormC(x):
   backnormCC=(x+1)/2*(np.max(data[:,2]-np.min(data[:,2])))+np.min(data[:,2])
 
   return backnormCC
+
 
 deltaCCtraining=df.iloc[:150,-1].values
 
