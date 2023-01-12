@@ -62,7 +62,7 @@ def create_model(ixb, YA, Snheff0, dKlayer, batch_input_shape, return_state= Fal
     return model
 
 if __name__ == "__main__":
-    # Paris law coefficients
+    #coefficients
     [ixb, YA] = [0.08, 0.24]
     
     df=pd.read_excel(r'C:\Users\Tuse\Desktop\rainyweather5.xlsx')
@@ -105,8 +105,7 @@ if __name__ == "__main__":
     training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, time_steps)
     test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, time_steps)
     Snheff0= np.asarray(20.7746*np.ones((training_set_sequence.shape[0],1)))
-        
-    # stress-intensity layer
+
     dKlayer = Sequential()
     dKlayer.add(Normalization(np.min(training_set_sequence[:,:,8,None]), np.max(training_set_sequence[:,:,8,None]), np.min(training_set_output), np.max(training_set_output)))
     dKlayer.add(Dense(25, activation='tanh'))
