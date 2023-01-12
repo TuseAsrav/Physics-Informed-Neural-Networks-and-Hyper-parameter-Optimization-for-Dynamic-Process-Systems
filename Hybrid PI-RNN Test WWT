@@ -1,5 +1,6 @@
 
 import pandas as pd
+import requests
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras.layers import RNN, Dense, Layer
@@ -65,7 +66,10 @@ if __name__ == "__main__":
     #coefficients
     [ixb, YA] = [0.08, 0.24]
     
-    df=pd.read_excel(r'C:\Users\Tuse\Desktop\rainyweather5.xlsx')
+    url='https://github.com/TuseAsrav/Physics-Informed-Neural-Networks-and-Hyper-parameter-Optimization-for-Dynamic-Process-Systems/blob/main/rainyweather5.xlsx?raw=true'
+    myfile = requests.get(url)
+
+    df=pd.read_excel(myfile.content)
     dff=df.drop(['t','Xbh5d1000','So5','Xs5','Xi5','Xp5','Xba5','Ss5','Xbh5','Sno5','Snd5','Salk5','ro1','ro2','ro3','ro6','ro3Eksik','carp','deltaSnh5'],axis=1)
     dfff=dff.iloc[674:924]
     data=np.array(dfff)
