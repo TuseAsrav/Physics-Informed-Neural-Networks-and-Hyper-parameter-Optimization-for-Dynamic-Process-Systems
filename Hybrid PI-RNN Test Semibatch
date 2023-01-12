@@ -1,4 +1,6 @@
+
 import pandas as pd
+import requests
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras.layers import RNN, Dense, Layer, LSTM, SimpleRNN
@@ -60,7 +62,10 @@ if __name__ == "__main__":
     #coefficients
     [k,v0,V0] = [0.2, 3, 100]
     
-    df=pd.read_excel(r'C:\Users\Tuse\Desktop\semibatch2.xlsx')
+    url= 'https://github.com/TuseAsrav/Physics-Informed-Neural-Networks-and-Hyper-parameter-Optimization-for-Dynamic-Process-Systems/blob/main/semibatch2.xlsx?raw=true'
+    myfile = requests.get(url)
+
+    df=pd.read_excel(myfile.content)
     dff=df.drop(['time','dk','deltaCC'],axis=1)
     data=np.array(dff)
     
