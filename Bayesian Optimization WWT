@@ -70,14 +70,13 @@ def custom_loss_function(data, y_pred):
 
 from keras.models import Sequential, Model
 from keras.layers import Dense, Input, GRU
-"""from scikeras.wrappers import KerasRegressor"""
 from numpy import mean
 from sklearn.model_selection import cross_val_score
 from skopt.space import Integer
 from skopt.utils import use_named_args
 from skopt import gp_minimize
 
-def baseline_model(optimizer="adam",batch_size=25,epochs=50,neurons=25,activation="tanh",time_steps=5):
+def baseline_model(optimizer="adam",batch_size=25,epochs=50,neurons=25,activation="tanh",layers= 2,time_steps=5):
     
     training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, time_steps)
     test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, time_steps)
@@ -88,7 +87,8 @@ def baseline_model(optimizer="adam",batch_size=25,epochs=50,neurons=25,activatio
     ro6=df.iloc[674+time_steps:824,-4].values
     
     model = Sequential()
-    model.add(GRU(neurons,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
+    for i in range (layers):
+        model.add(GRU(neurons,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
     model.add(GRU(neurons,activation="tanh",return_sequences=False))
     model.add(Dense(1))
     model.compile("adam",loss=custom_loss_function)
@@ -99,12 +99,13 @@ def baseline_model(optimizer="adam",batch_size=25,epochs=50,neurons=25,activatio
               ) #verbose set to 1 will show the training process
     return model
       
-search_space = [Integer(10,40),Integer(2,10)]
+search_space = [Integer(10,40),Integer(1,5)]
 
 def objective (params):
     neurons=params[0]
-    time_steps=params[1]
+    num_layers=params[1]
     
+    time_steps=5
     training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, time_steps)
     test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, time_steps)
     deltaSnh=df.iloc[674+time_steps:824,-1].values
@@ -114,7 +115,8 @@ def objective (params):
     ro6=df.iloc[674+time_steps:824,-4].values
     
     model = Sequential()
-    model.add(GRU(neurons,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
+    for i in range (num_layers):
+        model.add(GRU(neurons,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
     model.add(GRU(neurons,activation="tanh",return_sequences=False))
     model.add(Dense(units=1))
     model.summary()
@@ -137,7 +139,8 @@ def objective (params):
     mse1=metrics.mean_squared_error(actual_testset_values, model_testpredictions)
     
     model2 = Sequential()
-    model2.add(GRU(neurons,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
+    for i in range (num_layers):
+        model2.add(GRU(neurons,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
     model2.add(GRU(neurons,activation="tanh",return_sequences=False))
     model2.add(Dense(units=1))
     model2.summary()
