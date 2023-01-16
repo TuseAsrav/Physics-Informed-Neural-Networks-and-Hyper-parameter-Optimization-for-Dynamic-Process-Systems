@@ -168,7 +168,7 @@ def objective (params):
     validationerrors=mse1+mse2
     result=mean(validationerrors)
 
-    return -1.0*result
+    return result
 
 training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, 5)
 test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, 5)
