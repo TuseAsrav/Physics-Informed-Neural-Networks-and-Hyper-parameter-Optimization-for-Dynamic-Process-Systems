@@ -1,3 +1,4 @@
+
 import numpy as np
 import pandas as pd
 import requests
@@ -11,6 +12,7 @@ from bitstring import BitArray
 import tensorflow as tf
 
 tf.config.run_functions_eagerly(True)
+tf.autograph.experimental.do_not_convert
 
 np.random.seed(1120)
 
@@ -75,19 +77,19 @@ def custom_loss_function(data, y_pred):
    return mse+0.0000001*phyloss
 
 def train_evaluate(ga_individual_solution):   
-    # Decode GA solution to integer for window_size and num_units
+    # Decode GA solution to integer for num_layers and num_units
 
-    num_units_bits = BitArray(ga_individual_solution[:6]) 
+    num_units_bits = BitArray(ga_individual_solution[0:6]) 
     num_layers_bits= BitArray(ga_individual_solution[6:])
     
     num_units = num_units_bits.uint
     num_layers =num_layers_bits.uint
     print('Num of Units: ', num_units, 'Num of Layers', num_layers)
         
-    # Return fitness score of 100 if window_size or num_unit is zero
-    if num_units == 0 or num_layers:
+    # Return fitness score of 100 if num_layers or num_unit is zero
+    if num_units == 0 or num_layers == 0:
         return 100, 
-    
+
     # Segment the train_data based on new window_size; split into train and validation (80/20)
     x_train,y_train= prepare_dataset(train_data,train_data[:,-1],5)
                                           
@@ -99,15 +101,15 @@ def train_evaluate(ga_individual_solution):
 
     model=Sequential()
     for i in range (num_layers):
-        model.add(LSTM(units=num_units,activation='tanh',return_sequences=True,input_shape=(5,x_train.shape[2])))
+        model.add(GRU(units=num_units,activation='tanh',return_sequences=True,input_shape=(5,x_train.shape[2])))
     
-    model.add(LSTM(units=num_units,activation='tanh',return_sequences=False))
+    model.add(GRU(units=num_units,activation='tanh',return_sequences=False))
     model.add(Dense(1))
 
     model.compile(optimizer='adam',loss=custom_loss_function)
     print(x_train.size)
     print(np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))).shape)
-    model.fit(x_train, np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))), epochs=100, batch_size=25,shuffle=False)
+    model.fit(x_train, np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))), epochs=50, batch_size=25,shuffle=False)
 
     y_pred = model.predict(x_train)
     
@@ -119,7 +121,10 @@ def train_evaluate(ga_individual_solution):
 
 population_size = 4
 num_generations = 4
-gene_length = 10
+gene_length = 9
+
+"""del creator.FitnessMax
+del creator.Individual"""
 
 # As we are trying to minimize the RMSE score, that's why using -1.0. 
 # In case, when you want to maximize accuracy for instance, use 1.0
@@ -137,7 +142,7 @@ toolbox.register('select', tools.selRoulette)
 toolbox.register('evaluate', train_evaluate)
 
 population = toolbox.population(n = population_size)
-r = algorithms.eaSimple(population, toolbox, cxpb = 0.4, mutpb = 0.1, ngen = num_generations, verbose = False)
+r = algorithms.eaSimple(population, toolbox, cxpb = 0.4, mutpb = 0.01, ngen = num_generations, verbose = False)
 
 best_individuals = tools.selBest(population,k = 1)
 best_num_layers = None
@@ -147,6 +152,7 @@ for bi in best_individuals:
     
     num_units_bits = BitArray(bi[0:6]) 
     num_layers_bits = BitArray(bi[6:])
+    print(num_layers_bits)
     best_num_units = num_units_bits.uint
     best_num_layers = num_layers_bits.uint
     print('Num of Units: ', best_num_units,'Num of Layers: ', best_num_layers)
@@ -162,13 +168,13 @@ ro6=df.iloc[674+5:824,-4].values
 
 model=Sequential()
 for i in range (best_num_layers):
-    model.add(LSTM(units=best_num_units,activation='tanh',return_sequences=True,input_shape=(5,x_train.shape[2])))
+    model.add(GRU(units=best_num_units,activation='tanh',return_sequences=True,input_shape=(5,x_train.shape[2])))
 
-model.add(LSTM(units=best_num_units,activation='tanh',return_sequences=False))
+model.add(GRU(units=best_num_units,activation='tanh',return_sequences=False))
 model.add(Dense(1))
 
 model.compile(optimizer='adam',loss=custom_loss_function)
-model.fit(x_train, np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))), epochs=100, batch_size=25,shuffle=False)
+model.fit(x_train, np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))), epochs=50, batch_size=25,shuffle=False)
 
 y_predtrain= model.predict(x_train)
 model_trainprediction=backnorm(y_predtrain)
