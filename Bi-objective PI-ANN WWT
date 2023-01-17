@@ -54,8 +54,7 @@ def custom_loss_function(data, y_pred):
    Ro2=data[:,None,2]
    Ro3eksik=data[:,None,3]
    Ro6=data[:,None,4]
-   DeltaSnh=data[:,None,5]
-   print(K.print_tensor(y_true))    
+   DeltaSnh=data[:,None,5]  
    squared_difference = tf.square((y_true - y_pred))
    mse = tf.reduce_mean(squared_difference, axis=-1)
    y_prednonscaled=backnorm(y_pred.numpy())
