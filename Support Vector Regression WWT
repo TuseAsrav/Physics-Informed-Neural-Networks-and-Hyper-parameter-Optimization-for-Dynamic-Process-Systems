@@ -9,7 +9,7 @@ url='https://github.com/TuseAsrav/Physics-Informed-Neural-Networks-and-Hyper-par
 myfile = requests.get(url)
 
 df=pd.read_excel(myfile.content)
-dff=df.drop(['t','Xbh5d1000','So5','Xs5','Xi5','Xp5','Xba5','Ss5','Xbh5','Sno5','Snd5','Salk5','ro1','ro2','ro3','ro6','ro3Eksik','deltaSnh5'],axis=1)
+dff=df.drop(['t','Xbh5d1000','So5','Xs5','Xi5','Xp5','Xba5','Ss5','Xbh5','Sno5','Snd5','Salk5','ro1','ro2','ro3','ro6','ro3Eksik','deltaSnh5','carp'],axis=1)
 dfff=dff.iloc[674:924]
 data=np.array(dfff)
 
