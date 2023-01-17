@@ -26,11 +26,8 @@ class EulerIntegratorCell(Layer):
 
     def call(self, inputs, states):
         inputs=convert_to_tensor(inputs)
-        print(inputs.shape)
         Snheff_tm1=convert_to_tensor(states)
-        print(Snheff_tm1.shape)
         S_d_tm1 = concat((inputs[:,8,None], Snheff_tm1[0, :]), axis=1)
-        print(S_d_tm1.shape)
         dk_t    = self.dKlayer(S_d_tm1)
         dSnheff_t    = (self.ixb + 1/self.YA) * (dk_t) 
         Snheff       = dSnheff_t + Snheff_tm1[0, :]
