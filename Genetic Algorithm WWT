@@ -90,7 +90,6 @@ def train_evaluate(ga_individual_solution):
     if num_units == 0 or num_layers == 0:
         return 100, 
 
-    # Segment the train_data based on new window_size; split into train and validation (80/20)
     x_train,y_train= prepare_dataset(train_data,train_data[:,-1],5)
                                           
     deltaSnh=df.iloc[674+5:824,-1].values
