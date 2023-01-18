@@ -117,7 +117,7 @@ def objective (params):
 
     model.compile(loss=custom_loss_function, optimizer='Adam')
 
-    history = model.fit(
+    model.fit(
         training_set_sequence[0:70],
         np.hstack((training_set_output[0:70].reshape((70,1)),ro1[0:70].reshape((70,1)),ro2[0:70].reshape((70,1)),ro3eksik[0:70].reshape((70,1)),ro6[0:70].reshape((70,1)),deltaSnh[0:70].reshape((70,1)))),
         validation_data=(training_set_sequence[70:],np.hstack((training_set_output[70:].reshape((80-time_steps,1)),ro1[70:].reshape((80-time_steps,1)),ro2[70:].reshape((80-time_steps,1)),ro3eksik[70:].reshape((80-time_steps,1)),ro6[70:].reshape((80-time_steps,1)),deltaSnh[70:].reshape((80-time_steps,1))))),
@@ -126,11 +126,8 @@ def objective (params):
         shuffle=False)
     
     test_set_predictions = model.predict(training_set_sequence[70:])
-
-    model_testpredictions = backnorm(test_set_predictions)
-    actual_testset_values = backnorm(training_set_output[70:])
     
-    mse1=metrics.mean_squared_error(actual_testset_values, model_testpredictions)
+    mse1=metrics.mean_squared_error(training_set_output[70:], test_set_predictions)
     
     model2 = Sequential()
     for i in range (num_layers):
@@ -141,7 +138,7 @@ def objective (params):
     
     model2.compile(loss=custom_loss_function, optimizer='Adam')
 
-    history2 = model2.fit(
+    model2.fit(
         training_set_sequence[70:],
         np.hstack((training_set_output[70:].reshape((80-time_steps,1)),ro1[70:].reshape((80-time_steps,1)),ro2[70:].reshape((80-time_steps,1)),ro3eksik[70:].reshape((80-time_steps,1)),ro6[70:].reshape((80-time_steps,1)),deltaSnh[70:].reshape((80-time_steps,1)))),
         validation_data=(training_set_sequence[0:70],np.hstack((training_set_output[0:70].reshape((70,1)),ro1[0:70].reshape((70,1)),ro2[0:70].reshape((70,1)),ro3eksik[0:70].reshape((70,1)),ro6[0:70].reshape((70,1)),deltaSnh[0:70].reshape((70,1))))),
@@ -153,14 +150,11 @@ def objective (params):
     
     test_set_predictions2 = model2.predict(training_set_sequence[0:70])
 
-    model2_testpredictions = backnorm(test_set_predictions2)
-    actual_testset_values2 = backnorm(training_set_output[0:70])
-    
-    mse1=metrics.mean_squared_error(actual_testset_values, model_testpredictions)
-    mse2=metrics.mean_squared_error(actual_testset_values2, model2_testpredictions)
+    mse2=metrics.mean_squared_error(training_set_output[0:70], test_set_predictions2)
     
     validationerrors=mse1+mse2
     result=mean(validationerrors)
+    print(result)
 
     return result
 
