@@ -1,0 +1,205 @@
+import numpy as np
+import tensorflow as tf
+import pandas as pd
+import requests
+from sklearn import metrics
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+
+tf.config.run_functions_eagerly(True)
+tf.data.experimental.enable_debug_mode()
+tf.autograph.experimental.do_not_convert
+
+url='https://github.com/TuseAsrav/Physics-Informed-Neural-Networks-and-Hyper-parameter-Optimization-for-Dynamic-Process-Systems/blob/main/rainyweather5.xlsx?raw=true'
+myfile = requests.get(url)
+
+df=pd.read_excel(myfile.content)
+dff=df.drop(['t','Xbh5d1000','So5','Xs5','Xi5','Xp5','Xba5','Ss5','Xbh5','Sno5','Snd5','Salk5','ro1','ro2','ro3','ro6','ro3Eksik','deltaSnh5','carp'],axis=1)
+dfff=dff.iloc[674:924]
+data=np.array(dfff)
+
+n=data.shape[0]
+d=data.shape[1]
+
+normalized_data=np.zeros((n,d))
+
+for i in range(n):
+  for j in range(d):
+    normalized_data[i,j]=2*((data[i,j]-np.min(data[:,j]))/(np.max(data[:,j])-np.min(data[:,j])))-1
+
+new_set= pd.DataFrame(normalized_data, columns = dfff.columns)
+
+training_set=new_set.iloc[0:150]
+test_set=new_set.iloc[150:]
+
+
+def backnorm(x): 
+  backnormOutput=(x+1)/2*(np.max(data[:,-1]-np.min(data[:,-1])))+np.min(data[:,-1])
+
+  return backnormOutput
+
+def create_data_sequence(X, y, time_steps=1):
+
+    input_sequence, output = [], []
+    for i in range(len(X) - time_steps):
+        sequence = X.iloc[i:(i + time_steps)].values
+        input_sequence.append(sequence)        
+        output.append(y.iloc[i + time_steps])
+    return np.array(input_sequence), np.array(output)
+
+def backnorm(x): 
+  backnormOutput=(x+1)/2*(np.max(data[:,-1]-np.min(data[:,-1])))+np.min(data[:,-1])
+
+  return backnormOutput
+
+def custom_loss_function(data, y_pred):
+    
+   y_true=data[:,None,0]
+   Ro1=data[:,None,1]
+   Ro2=data[:,None,2]
+   Ro3eksik=data[:,None,3]
+   Ro6=data[:,None,4]
+   DeltaSnh=data[:,None,5]  
+   squared_difference = tf.square((y_true  - y_pred))
+   mse = tf.reduce_mean(squared_difference, axis=-1)
+   y_prednonscaled=backnorm(y_pred.numpy())
+   phyloss3=tf.square(DeltaSnh+0.08*Ro1+0.08*Ro2+(0.08+(1/0.24))*Ro3eksik*y_prednonscaled/(1+y_prednonscaled)-Ro6)
+   phyloss=tf.reduce_mean(phyloss3, axis=-1)
+   
+   return mse+0.0000001*phyloss
+
+def baseline_model(optimizer="adam",batch_size=25,epochs=50,neurons=25,activation="tanh",layers= 2,time_steps=5):
+    
+    training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, time_steps)
+    test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, time_steps)
+    
+    model = Sequential()
+    for i in range (layers):
+        model.add(GRU(neurons,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
+    model.add(GRU(neurons,activation="tanh",return_sequences=False))
+    model.add(Dense(1))
+    
+    model.compile("adam",loss=custom_loss_function)
+    
+    return model
+
+from keras.models import Sequential, Model
+from keras.layers import Dense, Input, GRU
+from numpy import mean
+from sklearn.model_selection import cross_val_score
+from skopt.space import Integer
+from skopt.utils import use_named_args
+from skopt import gp_minimize
+from sklearn.model_selection import ParameterGrid
+
+grid1 ={"num_layers": [Integer(1,2)]}
+grid2= {"neurons": [Integer(15,35)]}
+
+training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, 5)
+test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, 5)
+deltaSnh=df.iloc[679:824,-1].values
+ro1=df.iloc[679:824,-6].values
+ro2=df.iloc[679:824,-5].values
+ro3eksik=df.iloc[679:824,-7].values
+ro6=df.iloc[679:824,-4].values
+
+best_score=100
+   
+for c in [1,2]:
+    for g in [15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40]:
+
+        time_steps=5
+        model = Sequential()
+        for i in range (c):
+            model.add(GRU(g,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
+        model.add(GRU(g,activation="tanh",return_sequences=False))
+        model.add(Dense(units=1))
+        model.summary()
+        
+        model.compile(loss=custom_loss_function, optimizer='Adam')
+        
+        model.fit(
+            training_set_sequence[0:70],
+            np.hstack((training_set_output[0:70].reshape((70,1)),ro1[0:70].reshape((70,1)),ro2[0:70].reshape((70,1)),ro3eksik[0:70].reshape((70,1)),ro6[0:70].reshape((70,1)),deltaSnh[0:70].reshape((70,1)))),
+            validation_data=(training_set_sequence[70:],np.hstack((training_set_output[70:].reshape((80-time_steps,1)),ro1[70:].reshape((80-time_steps,1)),ro2[70:].reshape((80-time_steps,1)),ro3eksik[70:].reshape((80-time_steps,1)),ro6[70:].reshape((80-time_steps,1)),deltaSnh[70:].reshape((80-time_steps,1))))),
+            epochs=50, 
+            batch_size=25, 
+            shuffle=False)
+        
+        test_set_predictions = model.predict(training_set_sequence[70:])
+        
+        mse1=metrics.mean_squared_error(training_set_output[70:], test_set_predictions)
+        
+        model2 = Sequential()
+        for i in range (c):
+            model2.add(GRU(g,input_shape=(time_steps,training_set_sequence.shape[2]), activation="tanh",return_sequences=True))
+        model2.add(GRU(g,activation="tanh",return_sequences=False))
+        model2.add(Dense(units=1))
+        model2.summary()
+        
+        model2.compile(loss=custom_loss_function, optimizer='Adam')
+        
+        model2.fit(
+            training_set_sequence[70:],
+            np.hstack((training_set_output[70:].reshape((80-time_steps,1)),ro1[70:].reshape((80-time_steps,1)),ro2[70:].reshape((80-time_steps,1)),ro3eksik[70:].reshape((80-time_steps,1)),ro6[70:].reshape((80-time_steps,1)),deltaSnh[70:].reshape((80-time_steps,1)))),
+            validation_data=(training_set_sequence[0:70],np.hstack((training_set_output[0:70].reshape((70,1)),ro1[0:70].reshape((70,1)),ro2[0:70].reshape((70,1)),ro3eksik[0:70].reshape((70,1)),ro6[0:70].reshape((70,1)),deltaSnh[0:70].reshape((70,1))))),
+            epochs=50, 
+            batch_size=25, 
+            shuffle=False)
+        
+        model2.compile(loss=custom_loss_function, optimizer='Adam')
+        
+        test_set_predictions2 = model2.predict(training_set_sequence[0:70])
+        
+        mse2=metrics.mean_squared_error(training_set_output[0:70], test_set_predictions2)
+        
+        validationerrors=mse1+mse2
+        result=(validationerrors/2)
+        # save if best
+        if  result < best_score:
+            best_score = result
+            best_grid = {c,g}
+
+print ("MSE:",  best_score) 
+print ("Grid:", best_grid)
+
+es=tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10)
+
+modelf=Sequential()
+for i in range (c):
+    modelf.add(GRU(units=g,activation='tanh',return_sequences=True,input_shape=(5,training_set_sequence.shape[2])))
+
+modelf.add(GRU(units=g,activation='tanh',return_sequences=False))
+modelf.add(Dense(1))
+
+modelf.compile(optimizer='adam',loss=custom_loss_function)
+modelf.fit(training_set_sequence,np.hstack((training_set_output.reshape((145,1)),ro1.reshape((145,1)),ro2.reshape((145,1)),ro3eksik.reshape((145,1)),ro6.reshape((145,1)),deltaSnh.reshape((145,1)))),shuffle=False,batch_size=25,epochs=100,callbacks=[es])
+
+y_predtrain= modelf.predict(training_set_sequence)
+model_trainprediction=backnorm(y_predtrain)
+actual_trainset_values=backnorm(training_set_output)
+y_predtest = modelf.predict(test_set_sequence)
+model_testprediction=backnorm(y_predtest) 
+actual_testset_values=backnorm(test_set_output)
+
+mse = mean_squared_error(model_trainprediction, actual_trainset_values)
+print('Train MSE: ', mse)    
+
+mse = mean_squared_error(model_testprediction, actual_testset_values)
+print('Test MSE: ', mse)    
+
+fig,ax = plt.subplots()
+x=df['t']
+plt.plot(x[674+5:824,],model_trainprediction, label='Predicted Train Snh5')
+plt.plot(x[674+5:824,],actual_trainset_values, label='Actual Train Snh5')
+ax.set_xlabel('Days')
+ax.set_ylabel('Snh5')
+plt.legend();
+
+fig,ax = plt.subplots()
+x=df['t']
+plt.plot(x[824:924-5,],model_testprediction, label='Predicted Test Snh5')
+plt.plot(x[824:924-5,],actual_testset_values, label='Actual Test Snh5')
+ax.set_xlabel('Days')
+ax.set_ylabel('Snh5')
+plt.legend();
