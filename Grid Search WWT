@@ -159,10 +159,7 @@ for c in [1,2]:
         if  result < best_score:
             best_score = result
             best_grid = {c,g}
-
-print ("MSE:",  best_score) 
-print ("Grid:", best_grid)
-
+            
 es=tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10)
 
 modelf=Sequential()
@@ -203,3 +200,7 @@ plt.plot(x[824:924-5,],actual_testset_values, label='Actual Test Snh5')
 ax.set_xlabel('Days')
 ax.set_ylabel('Snh5')
 plt.legend();
+
+print ("MSE:",  best_score) 
+print ("Grid:", best_grid)
+
