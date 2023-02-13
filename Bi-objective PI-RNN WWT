@@ -148,7 +148,7 @@ model2_predictions = backnorm(test_set_predictions2)
 mse=metrics.mean_squared_error(actual_testset_values, model2_predictions)
 print('LSTM:Test MSE: ', mse)
 
-train_set_predictions2 = model3.predict(training_set_sequence)
+train_set_predictions2 = model2.predict(training_set_sequence)
 
 model2_trainpredictions= backnorm(train_set_predictions2)
 
