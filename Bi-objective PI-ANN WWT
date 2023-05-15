@@ -1,4 +1,5 @@
 
+
 import numpy as np
 import pandas as pd
 import requests
@@ -36,33 +37,25 @@ x_train=training_set.iloc[:,:8].values
 y_train=training_set.iloc[:,-1].values
 
 deltaSnh=df.iloc[674:824,-1].values
-ro1=df.iloc[674:824,-6].values
-ro2=df.iloc[674:824,-5].values
-ro3eksik=df.iloc[674:824,-7].values
-ro6=df.iloc[674:824,-4].values
+ro3eksik=df.iloc[674:824,-8].values
 
 def backnorm(x): 
   backnormOutput=(x+1)/2*(np.max(data[:,-1]-np.min(data[:,-1])))+np.min(data[:,-1])
 
   return backnormOutput
 
-
 def custom_loss_function(data, y_pred):
     
    y_true=data[:,None,0]
-   Ro1=data[:,None,1]
-   Ro2=data[:,None,2]
-   Ro3eksik=data[:,None,3]
-   Ro6=data[:,None,4]
-   DeltaSnh=data[:,None,5]  
+   Ro3eksik=data[:,None,1]
+   DeltaSnh=data[:,None,2]  
    squared_difference = tf.square((y_true - y_pred))
    mse = tf.reduce_mean(squared_difference, axis=-1)
    y_prednonscaled=backnorm(y_pred.numpy())
-   phyloss3=tf.square(DeltaSnh+0.08*Ro1+0.08*Ro2+(0.08+(1/0.24))*Ro3eksik*y_prednonscaled/(1+y_prednonscaled)-Ro6)
+   phyloss3=tf.square(DeltaSnh+0.01042*(0.08+1/0.24)*Ro3eksik*y_prednonscaled/(1+y_prednonscaled))
    phyloss=tf.reduce_mean(phyloss3, axis=-1)
    
-   
-   return mse+0.0000001*phyloss
+   return mse+0.0001*phyloss
 
     
 model = keras.Sequential()
@@ -77,7 +70,7 @@ es=tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10)
     
 history = model.fit(
         x_train,
-        np.hstack((y_train.reshape((150,1)),ro1.reshape((150,1)),ro2.reshape((150,1)),ro3eksik.reshape((150,1)),ro6.reshape((150,1)),deltaSnh.reshape((150,1)))),
+        np.hstack((y_train.reshape((150,1)),ro3eksik.reshape((150,1)),deltaSnh.reshape((150,1)))),
         epochs=400, 
         batch_size=25, 
         shuffle=False,
