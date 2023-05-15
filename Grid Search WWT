@@ -55,18 +55,15 @@ def backnorm(x):
 def custom_loss_function(data, y_pred):
     
    y_true=data[:,None,0]
-   Ro1=data[:,None,1]
-   Ro2=data[:,None,2]
-   Ro3eksik=data[:,None,3]
-   Ro6=data[:,None,4]
-   DeltaSnh=data[:,None,5]  
-   squared_difference = tf.square((y_true  - y_pred))
+   Ro3eksik=data[:,None,1]
+   DeltaSnh=data[:,None,2]  
+   squared_difference = tf.square((y_true - y_pred))
    mse = tf.reduce_mean(squared_difference, axis=-1)
    y_prednonscaled=backnorm(y_pred.numpy())
-   phyloss3=tf.square(DeltaSnh+0.08*Ro1+0.08*Ro2+(0.08+(1/0.24))*Ro3eksik*y_prednonscaled/(1+y_prednonscaled)-Ro6)
+   phyloss3=tf.square(DeltaSnh+0.01042*(0.08+1/0.24)*Ro3eksik*y_prednonscaled/(1+y_prednonscaled))
    phyloss=tf.reduce_mean(phyloss3, axis=-1)
    
-   return mse+0.0000001*phyloss
+   return mse+0.0001*phyloss
 
 def baseline_model(optimizer="adam",batch_size=25,epochs=50,neurons=25,activation="tanh",layers= 2,time_steps=5):
     
@@ -98,10 +95,7 @@ grid2= {"neurons": [Integer(15,35)]}
 training_set_sequence, training_set_output = create_data_sequence(training_set, training_set.Snh5, 5)
 test_set_sequence, test_set_output = create_data_sequence(test_set, test_set.Snh5, 5)
 deltaSnh=df.iloc[679:824,-1].values
-ro1=df.iloc[679:824,-6].values
-ro2=df.iloc[679:824,-5].values
-ro3eksik=df.iloc[679:824,-7].values
-ro6=df.iloc[679:824,-4].values
+ro3eksik=df.iloc[679:824,-8].values
 
 best_score=100
    
@@ -120,8 +114,8 @@ for c in [1,2]:
         
         model.fit(
             training_set_sequence[0:70],
-            np.hstack((training_set_output[0:70].reshape((70,1)),ro1[0:70].reshape((70,1)),ro2[0:70].reshape((70,1)),ro3eksik[0:70].reshape((70,1)),ro6[0:70].reshape((70,1)),deltaSnh[0:70].reshape((70,1)))),
-            validation_data=(training_set_sequence[70:],np.hstack((training_set_output[70:].reshape((80-time_steps,1)),ro1[70:].reshape((80-time_steps,1)),ro2[70:].reshape((80-time_steps,1)),ro3eksik[70:].reshape((80-time_steps,1)),ro6[70:].reshape((80-time_steps,1)),deltaSnh[70:].reshape((80-time_steps,1))))),
+            np.hstack((training_set_output[0:70].reshape((70,1)),ro3eksik[0:70].reshape((70,1)),deltaSnh[0:70].reshape((70,1)))),
+            validation_data=(training_set_sequence[70:],np.hstack((training_set_output[70:].reshape((80-time_steps,1)),ro3eksik[70:].reshape((80-time_steps,1)),deltaSnh[70:].reshape((80-time_steps,1))))),
             epochs=50, 
             batch_size=25, 
             shuffle=False)
@@ -141,8 +135,8 @@ for c in [1,2]:
         
         model2.fit(
             training_set_sequence[70:],
-            np.hstack((training_set_output[70:].reshape((80-time_steps,1)),ro1[70:].reshape((80-time_steps,1)),ro2[70:].reshape((80-time_steps,1)),ro3eksik[70:].reshape((80-time_steps,1)),ro6[70:].reshape((80-time_steps,1)),deltaSnh[70:].reshape((80-time_steps,1)))),
-            validation_data=(training_set_sequence[0:70],np.hstack((training_set_output[0:70].reshape((70,1)),ro1[0:70].reshape((70,1)),ro2[0:70].reshape((70,1)),ro3eksik[0:70].reshape((70,1)),ro6[0:70].reshape((70,1)),deltaSnh[0:70].reshape((70,1))))),
+            np.hstack((training_set_output[70:].reshape((80-time_steps,1)),ro3eksik[70:].reshape((80-time_steps,1)),deltaSnh[70:].reshape((80-time_steps,1)))),
+            validation_data=(training_set_sequence[0:70],np.hstack((training_set_output[0:70].reshape((70,1)),ro3eksik[0:70].reshape((70,1)),deltaSnh[0:70].reshape((70,1))))),
             epochs=50, 
             batch_size=25, 
             shuffle=False)
@@ -170,7 +164,7 @@ modelf.add(GRU(units=g,activation='tanh',return_sequences=False))
 modelf.add(Dense(1))
 
 modelf.compile(optimizer='adam',loss=custom_loss_function)
-modelf.fit(training_set_sequence,np.hstack((training_set_output.reshape((145,1)),ro1.reshape((145,1)),ro2.reshape((145,1)),ro3eksik.reshape((145,1)),ro6.reshape((145,1)),deltaSnh.reshape((145,1)))),shuffle=False,batch_size=25,epochs=100,callbacks=[es])
+modelf.fit(training_set_sequence,np.hstack((training_set_output.reshape((145,1)),ro3eksik.reshape((145,1)),deltaSnh.reshape((145,1)))),shuffle=False,batch_size=25,epochs=100,callbacks=[es])
 
 y_predtrain= modelf.predict(training_set_sequence)
 model_trainprediction=backnorm(y_predtrain)
@@ -203,4 +197,3 @@ plt.legend();
 
 print ("MSE:",  best_score) 
 print ("Grid:", best_grid)
-
