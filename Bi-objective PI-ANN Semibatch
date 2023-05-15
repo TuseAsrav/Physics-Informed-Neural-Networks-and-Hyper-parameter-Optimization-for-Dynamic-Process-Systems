@@ -79,7 +79,7 @@ def custom_loss_function(data, y_pred):
    K.print_tensor(y_true)"""
    K.print_tensor(phyloss)
 
-   return 0.001*mse+100*phyloss
+   return mse+phyloss
 
 
 model = keras.Sequential()
