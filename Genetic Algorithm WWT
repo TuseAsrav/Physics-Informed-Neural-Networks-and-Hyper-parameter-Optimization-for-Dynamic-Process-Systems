@@ -1,4 +1,5 @@
 
+
 import numpy as np
 import pandas as pd
 import requests
@@ -41,7 +42,6 @@ test_data=normalized_data[150:]
 x_train=[]
 y_train=[]
 
-
 def prepare_dataset(X, y, time_steps=1):
     
     input_sequence, output = [], []
@@ -63,18 +63,15 @@ def backnorm(x):
 def custom_loss_function(data, y_pred):
     
    y_true=data[:,None,0]
-   Ro1=data[:,None,1]
-   Ro2=data[:,None,2]
-   Ro3eksik=data[:,None,3]
-   Ro6=data[:,None,4]
-   DeltaSnh=data[:,None,5]   
+   Ro3eksik=data[:,None,1]
+   DeltaSnh=data[:,None,2]  
    squared_difference = tf.square((y_true - y_pred))
    mse = tf.reduce_mean(squared_difference, axis=-1)
    y_prednonscaled=backnorm(y_pred.numpy())
-   phyloss3=tf.square(DeltaSnh+0.08*Ro1+0.08*Ro2+(0.08+(1/0.24))*Ro3eksik*y_prednonscaled/(1+y_prednonscaled)-Ro6)
+   phyloss3=tf.square(DeltaSnh+0.01042*(0.08+1/0.24)*Ro3eksik*y_prednonscaled/(1+y_prednonscaled))
    phyloss=tf.reduce_mean(phyloss3, axis=-1)
    
-   return mse+0.0000001*phyloss
+   return mse+0.0001*phyloss
 
 def train_evaluate(ga_individual_solution):   
     # Decode GA solution to integer for num_layers and num_units
@@ -93,10 +90,7 @@ def train_evaluate(ga_individual_solution):
     x_train,y_train= prepare_dataset(train_data,train_data[:,-1],5)
                                           
     deltaSnh=df.iloc[674+5:824,-1].values
-    ro1=df.iloc[674+5:824,-6].values
-    ro2=df.iloc[674+5:824,-5].values
-    ro3eksik=df.iloc[674+5:824,-7].values
-    ro6=df.iloc[674+5:824,-4].values
+    ro3eksik=df.iloc[674+5:824,-8].values
 
     model=Sequential()
     for i in range (num_layers):
@@ -107,8 +101,8 @@ def train_evaluate(ga_individual_solution):
 
     model.compile(optimizer='adam',loss=custom_loss_function)
     print(x_train.size)
-    print(np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))).shape)
-    model.fit(x_train, np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))), epochs=50, batch_size=25,shuffle=False)
+    print(np.hstack((y_train.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))).shape)
+    model.fit(x_train, np.hstack((y_train.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))), epochs=50, batch_size=25,shuffle=False)
 
     y_pred = model.predict(x_train)
     
@@ -160,10 +154,7 @@ x_train,y_train = prepare_dataset(train_data,train_data[:,-1],5)
 x_test, y_test = prepare_dataset(test_data,test_data[:,-1],5)
 
 deltaSnh=df.iloc[674+5:824,-1].values
-ro1=df.iloc[674+5:824,-6].values
-ro2=df.iloc[674+5:824,-5].values
-ro3eksik=df.iloc[674+5:824,-7].values
-ro6=df.iloc[674+5:824,-4].values
+ro3eksik=df.iloc[674+5:824,-8].values
 
 model=Sequential()
 for i in range (best_num_layers):
@@ -173,7 +164,7 @@ model.add(GRU(units=best_num_units,activation='tanh',return_sequences=False))
 model.add(Dense(1))
 
 model.compile(optimizer='adam',loss=custom_loss_function)
-model.fit(x_train, np.hstack((y_train.reshape((y_train.size,1)),ro1.reshape((y_train.size,1)),ro2.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),ro6.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))), epochs=50, batch_size=25,shuffle=False)
+model.fit(x_train, np.hstack((y_train.reshape((y_train.size,1)),ro3eksik.reshape((y_train.size,1)),deltaSnh.reshape(y_train.size,1))), epochs=50, batch_size=25,shuffle=False)
 
 y_predtrain= model.predict(x_train)
 model_trainprediction=backnorm(y_predtrain)
