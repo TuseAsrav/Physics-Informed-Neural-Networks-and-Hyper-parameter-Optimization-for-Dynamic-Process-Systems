@@ -69,7 +69,7 @@ def custom_loss_function(data, y_pred):
    phyloss3=tf.square(deltaCC-0.2*Ca*Cb+EQ*y_prednonscaled)
    phyloss=tf.reduce_sum(phyloss3, axis=-1)
 
-   return mse+0*phyloss
+   return mse+phyloss
 
 def create_data_sequence(X, y, time_steps=1):
 
